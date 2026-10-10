@@ -247,7 +247,17 @@ class Web(BaseHTTPRequestHandler):
 
     def login_page(self,message=''):
         if self.user:return self.redirect('/panel')
-        form=f'''<div class="login-shell"><div class="login-art"><span class="pill pill-light">Plataforma educativa</span><h1>Enseñar el movimiento. <em>Comprender el cuerpo.</em></h1><p>Contenidos científicos, registros y evaluación pedagógica en un solo lugar.</p><div class="login-art-detail">EF+ <span>Educación · Ciencia · Tecnología</span></div></div><section class="login-card"><span class="eyebrow">ACCESO SEGURO</span><h2>Bienvenido de nuevo</h2><p>Ingresa con tu cuenta de docente o administrador.</p>{f'<div class="alert alert-error">{e(message)}</div>' if message else ''}<form method="post" action="/ingresar" class="stack-form">{field('email','Correo electrónico',fieldtype='email',required=True,placeholder='docente@liceo.edu')}{field('password','Contraseña',fieldtype='password',required=True,placeholder='Tu contraseña')}<button class="btn btn-primary btn-block">Ingresar al panel {icon('arrow',17)}</button></form><a href="/" class="under-link">← Regresar al sitio educativo</a><p class="login-footnote">Las cuentas son creadas por el administrador. Si olvidaste tu contraseña, solicítale restablecerla.</p></section></div>'''
+        no_users = False
+        try:
+            no_users = (self.db.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0)
+        except Exception:
+            pass
+        notice = ''
+        if no_users:
+            notice = '<div class="alert alert-info"><b>Configuración inicial:</b> Aún no hay cuentas en el sistema. Configura <code>EF_ADMIN_EMAIL</code> y <code>EF_ADMIN_PASSWORD</code> en las variables de entorno de Dokploy y redespliega la aplicación.</div>'
+        elif message:
+            notice = f'<div class="alert alert-error">{e(message)}</div>'
+        form=f'''<div class="login-shell"><div class="login-art"><span class="pill pill-light">Plataforma educativa</span><h1>Enseñar el movimiento. <em>Comprender el cuerpo.</em></h1><p>Contenidos científicos, registros y evaluación pedagógica en un solo lugar.</p><div class="login-art-detail">EF+ <span>Educación · Ciencia · Tecnología</span></div></div><section class="login-card"><span class="eyebrow">ACCESO SEGURO</span><h2>Bienvenido de nuevo</h2><p>Ingresa con tu cuenta de docente o administrador.</p>{notice}<form method="post" action="/ingresar" class="stack-form">{field('email','Correo electrónico',fieldtype='email',required=True,placeholder='docente@liceo.edu')}{field('password','Contraseña',fieldtype='password',required=True,placeholder='Tu contraseña')}<button class="btn btn-primary btn-block">Ingresar al panel {icon('arrow',17)}</button></form><a href="/" class="under-link">← Regresar al sitio educativo</a><p class="login-footnote">Las cuentas son creadas por el administrador. Si olvidaste tu contraseña, solicítale restablecerla.</p></section></div>'''
         return self.render('Ingresar',form)
 
     def login_submit(self):
@@ -560,19 +570,25 @@ def main():
 
     # Auto-aprovisionamiento seguro e idempotente de administrador mediante variables de entorno
     admin_email = os.getenv('EF_ADMIN_EMAIL', '').strip().lower()
-    admin_pass = os.getenv('EF_ADMIN_PASSWORD', '')
+    admin_pass = os.getenv('EF_ADMIN_PASSWORD', '').strip()
     admin_name = os.getenv('EF_ADMIN_NAME', '').strip() or 'Administrador'
 
     with connect() as db:
-        has_admin = bool(db.execute("SELECT 1 FROM users WHERE role='admin'").fetchone())
-        if not has_admin and admin_email and admin_pass:
-            if re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', admin_email) and len(admin_pass) >= 12:
-                add_admin(admin_email, admin_pass, admin_name)
-                print(f'[EF+] Administrador inicial configurado exitosamente para: {admin_email}')
-                has_admin = True
+        if admin_email and admin_pass:
+            if re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', admin_email) and len(admin_pass) >= 6:
+                existing = db.execute("SELECT id FROM users WHERE email=?", (admin_email,)).fetchone()
+                if existing:
+                    db.execute("UPDATE users SET password_hash=?, role='admin' WHERE id=?",
+                               (hash_password(admin_pass), existing['id']))
+                    db.commit()
+                    print(f'[EF+] Credenciales de administrador actualizadas para: {admin_email}')
+                else:
+                    add_admin(admin_email, admin_pass, admin_name)
+                    print(f'[EF+] Administrador inicial configurado exitosamente para: {admin_email}')
             else:
-                print('[EF+] Advertencia: EF_ADMIN_EMAIL o EF_ADMIN_PASSWORD no cumplen con el formato requerido.')
+                print('[EF+] Advertencia: EF_ADMIN_EMAIL debe ser un correo válido y EF_ADMIN_PASSWORD tener al menos 6 caracteres.')
 
+        has_admin = bool(db.execute("SELECT 1 FROM users WHERE role='admin'").fetchone())
         if not has_admin:
             print('[EF+] Aviso: No se detectó cuenta de administrador creada.')
             print('[EF+] Para crearla automáticamente en producción, define EF_ADMIN_EMAIL y EF_ADMIN_PASSWORD.')
