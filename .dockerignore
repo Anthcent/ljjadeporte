@@ -1,0 +1,50 @@
+# Control de versiones
+.git/
+.github/
+.gitignore
+
+# Archivos de entorno y secretos
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+
+# Bases de datos y datos locales de desarrollo
+datos/*.sqlite3*
+datos/*.db
+*.sqlite3
+*.db
+
+# Cachés y temporales de Python
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
+
+# Pruebas automatizadas (no requeridas en la imagen de producción)
+tests/
+
+# Scripts locales de escritorio
+INICIAR_WINDOWS.bat
+INICIAR_LINUX.sh
+
+# Configuraciones de IDE y archivos del sistema
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
